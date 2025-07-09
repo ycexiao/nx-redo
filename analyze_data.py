@@ -19,7 +19,7 @@ baseline_features = [
 ## Get trivial classifier
 trivial_scores = []
 trivial_dump_path = 'active-data-house/trivial-scores.pkl'
-fea_tar_model = generate_fea_tar_model(features, target)
+fea_tar_model = generate_fea_tar_model(feature, target)
 for i, rseed in enumerate(random_seeds):
     with open(data_path[i], 'rb') as f:
         train_test_data = pickle.load(f)
@@ -33,10 +33,10 @@ for i, rseed in enumerate(random_seeds):
                 X_train, X_test, y_train, y_test = lookup(train_test_data, 'train_test', fea, tar, ele)
             except IndexError:
                 print(fea, tar, ele)
-            labels, counts = np.unique(y_test, return_counts=True)
-            y_trivial_pred = np.ones(len(y_test)) * labels[np.argmax(counts)]
-            score = f1_score(y_test, y_trivial_pred, average='weighted')
-            
+                labels, counts = np.unique(y_test, return_counts=True)
+                y_trivial_pred = np.ones(len(y_test)) * labels[np.argmax(counts)]
+                score = f1_score(y_test, y_trivial_pred, average='weighted')
+                
             tmp = {}
             tmp['element'] = ele
             tmp['features'] = fea

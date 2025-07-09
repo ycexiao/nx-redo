@@ -32,7 +32,7 @@ new_data_path = sort_files(find_files('active-data-house', is_new_data), random_
 
 sum_len = lambda x: sum([len(x[i]) for i in range(len(x))])
 
-fea_tar_model = generate_fea_tar_model(features, target)
+fea_tar_model = generate_fea_tar_model(feature, target)
 for i in range(len(old_results_path)):
     # print(random_seeds[i])
     # print(old_results_path[i])
@@ -40,7 +40,7 @@ for i in range(len(old_results_path)):
     # print(old_data_path[i])
     # print(new_data_path[i])
 
-    data, track = build_train_test_data(elements, load_path, features, target, int(random_seeds[i]))
+    data, track = build_train_test_data(elements, load_path, feature, target, int(random_seeds[i]))
 
     with open(old_results_path[i], 'rb') as f:
         old_results = pickle.load(f)
