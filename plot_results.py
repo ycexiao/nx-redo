@@ -1,11 +1,9 @@
-import utils
-import conf
-from utils import *
-from conf import *
-import importlib
-
-importlib.reload(conf)
-importlib.reload(utils)
+from matplotlib import pyplot as plt
+from helper import easyDatabase
+from ml import convert_features_name
+import numpy as np
+from scipy.signal import find_peaks
+import pickle
 
 targets = ["cs", "cn", "bl"]
 elements = ["Ti", "Cu", "Fe", "Mn"]
@@ -18,15 +16,15 @@ elements = ["Ti", "Cu", "Fe", "Mn"]
 plt.style.use("seaborn-v0_8")
 
 plot_features = [
-    ["x_pdf"],
     ["nx_pdf"],
     ["x_pdf", "n_pdf"],
-    ["xanes", "x_pdf"],
+    ["xanes", "n_pdf"],
     ["xanes", "nx_pdf"],
     ["xanes", "x_pdf", "n_pdf"],
 ]
 
 baseline_features = [
+    ["x_pdf"],
     ["xanes"],
     ["xanes", "diff_x_pdf"],
 ]
@@ -55,9 +53,12 @@ def results_plot(
                 "element": elements[j],
                 "features": plot_features[k],
             }
-            data = results_database.filter_data(keys_dict).value
-            scores.append(data["score"])
-            errors.append(data["error"])
+            data = results_database.filter_data(
+                ["target", "element", "features"],
+                [target, elements[j], plot_features[k]],
+            ).value
+            scores.append(np.mean(data["test_scores"]))
+            errors.append(np.std(data["test_scores"]))
 
         bar = axes[j].bar(range(len(plot_features)), scores, yerr=errors)
         for k in range(len(scores)):
@@ -69,38 +70,39 @@ def results_plot(
 
     for j in range(len(elements)):
         scores = []
+        errors = []
         for k in range(len(baseline_features)):
             keys_dict = {
                 "target": target,
                 "element": elements[j],
                 "features": baseline_features[k],
             }
-            data = results_database.filter_data(keys_dict).value
-            mean_value = data["score"]
-            std_value = data["error"]
+            data = results_database.filter_data(
+                ["target", "element", "features"],
+                [target, elements[j], baseline_features[k]],
+
+            ).value
+            scores.append(np.mean(data["test_scores"]))
+            errors.append(np.std(data["test_scores"]))
             axes[j].set_xlim([-1, len(plot_features)])
             xlim = axes[j].get_xlim()
             axes[j].fill_between(
                 np.linspace(*xlim, 100),
-                np.ones(100) * (mean_value - std_value / 2),
-                np.ones(100) * (mean_value + std_value / 2),
+                np.ones(100) * (scores[-1] - errors[-1] / 2),
+                np.ones(100) * (scores[-1] + errors[-1] / 2),
                 alpha=0.5,
                 color=colors[k + 2],
                 label=baseline_names[k],
             )
             if ylim:
                 axes[j].set_ylim(*ylim)
-
-    # plot
-    for j, ax in enumerate(axes):
-        set_ax_style(
-            ax,
-            xticks=convert_features_name(plot_features),
-            ylabel=ylabel,
-            title=elements[j],
-        )
-        if j != 0:
-            set_ax_style(ax, ylabel="", yticks=[])
+    for j in range(len(elements)):
+        axes[j].set_title(elements[j])
+        axes[j].set_xticks(range(len(plot_features)))
+        axes[j].set_xticklabels(
+            convert_features_name(plot_features), rotation=45, ha="right"
+            )
+        axes[j].set_ylabel(ylabel)
 
     # setp
     prop_cycle = plt.rcParams["axes.prop_cycle"]
@@ -116,6 +118,17 @@ def results_plot(
 
 ## feature importance plot
 def feature_importance_plot(results_database, tar, title):
+    plot_features = [
+        ["x_pdf"],
+        ["x_pdf", "n_pdf"],
+        ["nx_pdf"],
+        ["xanes"],
+        ["xanes", "x_pdf"],
+        ["xanes", "n_pdf"],
+        ["xanes", "nx_pdf"],
+        ["xanes", "diff_x_pdf"],
+        ["xanes", "x_pdf", "n_pdf"],
+    ]
     prop_cycle = plt.rcParams["axes.prop_cycle"]
     colors = prop_cycle.by_key()["color"]
     feature_names = convert_features_name(plot_features)
@@ -130,7 +143,10 @@ def feature_importance_plot(results_database, tar, title):
                 "features": plot_features[j],
                 "element": elements[k],
             }
-            data = results_database.filter_data(keys_dict).value
+            data = results_database.filter_data(
+                ["target", "features", "element"],
+                [tar, plot_features[j], elements[k]],
+                ).value
             importances = data["importances"]
             axes[j, k].plot(
                 range(len(importances[0])),
@@ -172,22 +188,37 @@ def feature_importance_plot(results_database, tar, title):
 
 
 if __name__ == "__main__":
-    filename = "results-40-in-database.pkl"
-    with open(filename, "rb") as f:
-        results_database = pickle.load(f)
+    data_path = "newest_combined_data.pkl"
+    with open(data_path, "rb") as f:
+        data = pickle.load(f)
 
+    results_database = data["results"]
+    # xanes_npdf_database = result1easyDatabase(result_data)
+
+    # filename = "results-40-in-database.pkl"
+    # with open(filename, "rb") as f:
+    # results_database = pickle.load(f)
+    # results_database.keynames = results_database.members[0].get_keynames()
+
+    # results_database = results_database.combine(xanes_npdf_database)
+    # tmp = results_database.filter_data(
+    #     {"target": "bl", "element": "Ti", "features": ["xanes", "n_pdf"]}
+    # )
+    # print(tmp.value)
+
+    # result plot
     run_kwargs = [
         {
             "tar": "cs",
             "title": "Oxidation State",
             "ylabel": "weighted mean F1 score",
-            "ylim": [0.6, 0.95],
+            "ylim": [0, 1],
         },
         {
             "tar": "cn",
             "title": "Coordination Number",
             "ylabel": "weighted mean F1 score",
-            "ylim": [0.6, 0.95],
+            "ylim": [0, 1],
         },
         {
             "tar": "bl",
@@ -196,31 +227,17 @@ if __name__ == "__main__":
             "ylim": None,
         },
     ]
-    # for kwarg in run_kwargs:
-    #     results_plot(results_database, **kwarg)
-    #     plt.legend(bbox_to_anchor=(1.25, 1.15))
-    # plt.show()
-    # imp_kwargs = [
-    # {"tar": "cs", "title": "Oxidation State"},
-    # {"tar": "cn", "title": "Coordination Number"},
-    # {"tar": "bl", "title": "Bond Length"},
-    # ]
+    for kwarg in run_kwargs:
+        results_plot(results_database, **kwarg)
+        plt.legend(bbox_to_anchor=(1.35, 1.16))
+    plt.show()
 
+    # importance plot
+    # imp_kwargs = [
+        # {"tar": "cs", "title": "Oxidation State"},
+        # {"tar": "cn", "title": "Coordination Number"},
+        # {"tar": "bl", "title": "Bond Length"},
+    # ]
     # for kwarg in imp_kwargs:
-    # feature_importance_plot(results_database, **kwarg)
+        # feature_importance_plot(results_database, **kwarg)
     # plt.show()
-    # results_plot
-    # results_database,
-    # tar="bl",
-    # title="Oxidation State",
-    # ylabel="weighted mean F1 score",
-    # ylim=None,
-    # )
-    # feature_importance_plot(
-    #     results_database, tar="cs", title="Coordination number"
-    # )
-    # features = ["xanes", "x_pdf", "nx_pdf"]
-    # target = "cn"
-    # element = "Ti"
-    # lookup(results, "scores", features, target, element)
-    #

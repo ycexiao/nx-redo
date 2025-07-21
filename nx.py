@@ -1,19 +1,46 @@
-import datetime
-import random
-from conf import *
-from utils.ml import *
-from utils.handy import *
-from utils.analysis import *
+import os
+import time
+import pickle
+from ml import build_train_test_data, generate_fea_tar_model, train_model
+from helper import easyDatabase
 
 # tune_hyper = True
 # results_path = 'empty_pickle.pkl'
 
+elements = ["Ti", "Cu", "Fe", "Mn"]
+file_names = [
+    element + "_collection.json" for element in elements
+]  # filename or path to the collection
+load_dir = "datasets"
+load_path = [
+    os.path.join(load_dir, file_names[i]) for i in range(len(file_names))
+]
+
+targets = ["cs", "cn", "bl"]
+
+features = [
+    ["x_pdf", "n_pdf"],
+    ["nx_pdf"],
+    ["xanes", "x_pdf", "n_pdf"],
+    ["xanes", "nx_pdf"],
+    ["xanes"],
+    ["x_pdf"],
+    ["n_pdf"],
+    ["xanes", "x_pdf"],
+    ["xanes", "n_pdf"],
+    ["xanes", "diff_x_pdf"],
+]
+
+n_estimators = [25, 50, 100, 200, 300]
+max_features = [10, 15, 20, 25, 30, 35]
+default_model_params = {
+    "n_estimators": n_estimators,
+    "max_features": max_features,
+}
+
 
 def main(
-    read_path,
-    write_results_path,
-    write_data_path,
-    write_track_path,
+    training_history="combined_data.pkl",
     random_seed=40,
 ):
     """
@@ -23,15 +50,26 @@ def main(
     train-test-data is changed because new features in the X_train and X_test
     results-data is changed because new resuts.
     """
+    with open(training_history, "rb") as f:
+        training_history = pickle.load(f)
     train_test_data, track_data = build_train_test_data(
-        elements, load_path, features, target, random_seed
+        elements, load_path, features, targets, random_seed
     )
-    with open(write_data_path, "wb") as f:
-        pickle.dump(train_test_data, f)  # with open(data_path[i], 'rb') as f:
-    with open(write_track_path, "wb") as f:
-        pickle.dump(track_data, f)  # with open(data_path[i], 'rb') as f:
+    keynames = ["target", "element", "features"]
+    split_valuekeys = ["train_mp_ids", "test_mp_ids"]
+    split_database = easyDatabase(keynames)
+    for k in range(len(track_data)):
+        keys = [track_data[k][key] for key in keynames]
+        value = {key: track_data[k][key] for key in split_valuekeys}
+        split_database.add_member(keynames, keys, value)
+    train_test_valuekeys = ["train_test"]
+    train_test_database = easyDatabase(keynames)
+    for k in range(len(train_test_data)):
+        keys = [train_test_data[k][key] for key in keynames]
+        value = {key: train_test_data[k][key] for key in train_test_valuekeys}
+        train_test_database.add_member(keynames, keys, value)
 
-    fea_tar_model = generate_fea_tar_model(features, target)
+    fea_tar_model = generate_fea_tar_model(features, targets)
     total_start = time.time()
     total_outs = []
 
@@ -45,29 +83,29 @@ def main(
                     fea_tar_model[k]["features"], fea_tar_model[k]["target"]
                 )
             )
-            dict = {
-                "element": elements[j],
-                "features": fea_tar_model[k]["features"],
-                "target": fea_tar_model[k]["target"],
-            }
 
             fea = fea_tar_model[k]["features"]
             tar = fea_tar_model[k]["target"]
             ele = elements[j]
 
-            X_train, X_test, y_train, y_test = lookup(
-                train_test_data, "train_test", fea, tar, ele
-            )
+            X_train, X_test, y_train, y_test = (
+                train_test_database.filter_data(
+                    ["element", "features", "target"], [ele, fea, tar]
+                )
+            ).value["train_test"]
 
             try:
-                model_params, findit = lookup_model_params(
-                    read_path, fea, tar, ele
+                model_params = (
+                    training_history["results"]
+                    .records[-1]
+                    .filter_data(
+                        ["element", "features", "target"], [ele, fea, tar]
+                    )
+                    .value["model_params"]
                 )
-                model_params = {
-                    key: model_params[key]
-                    for key, val in default_model_params.items()
-                }
-            except:
+                findit = True
+            except KeyError:
+                model_params = default_model_params
                 findit = False
 
             # # findit = False  # Retrain
@@ -79,29 +117,26 @@ def main(
             else:
                 fea_tar_model[k]["model_params"] = default_model_params
                 print("Hyper-parameters not Found. Run GridSearch.")
-                tune_hyper = (
-                    not findit
-                )  # if no find the data, run gridsearchcv.
-                train_outcome = train_model(  # main step
-                    X_train=X_train,
-                    X_test=X_test,
-                    y_train=y_train,
-                    y_test=y_test,
-                    tune_hyper=tune_hyper,
-                    **fea_tar_model[k]
-                )
-                out = {}
-                out["train_scores"] = train_outcome[0][0]
-                out["test_scores"] = train_outcome[0][1]
-                out["importances"] = train_outcome[1]
-                out["model_params"] = train_outcome[2]
+            tune_hyper = not findit  # if no find the data, run gridsearchcv.
+            train_outcome = train_model(  # main step
+                X_train=X_train,
+                X_test=X_test,
+                y_train=y_train,
+                y_test=y_test,
+                tune_hyper=tune_hyper,
+                **fea_tar_model[k]
+            )
+            out = {}
+            out["train_scores"] = train_outcome[0][0]
+            out["test_scores"] = train_outcome[0][1]
+            out["importances"] = train_outcome[1]
+            out["model_params"] = train_outcome[2]
             if len(train_outcome) == 4:
                 out["y_pred"] = train_outcome[3]
-                out["element"] = ele
-                out["features"] = fea
-                out["target"] = tar
-                total_outs.append(out)
-
+            out["element"] = ele
+            out["features"] = fea
+            out["target"] = tar
+            total_outs.append(out)
             print(
                 "{}/{} round finished, cost {} seconds in this round.".format(
                     k + j * len(fea_tar_model),
@@ -112,32 +147,30 @@ def main(
             print("\n\n")
 
     print("Total {} seconds".format(time.time() - total_start))
-    with open(write_results_path, "wb") as f:
-        pickle.dump(total_outs, f)
+
+    keynames = ["target", "element", "features"]
+    result_valuekeys = [
+        "train_scores",
+        "test_scores",
+        "importances",
+        "model_params",
+    ]
+    result_database = easyDatabase(keynames)
+    for k in range(len(total_outs)):
+        keys = [total_outs[k][key] for key in keynames]
+        value = {key: total_outs[k][key] for key in result_valuekeys}
+        result_database.add_member(keynames, keys, value)
+    return {
+        "results": result_database,
+        "split": split_database,
+        "train-test": train_test_database,
+    }
 
 
 if __name__ == "__main__":
-    random_seed = 40
-    train_test_data, track_data = build_train_test_data(
-        elements, load_path, features, target, random_seed
+    out = main(
+        "combined_data.pkl",
+        40,
     )
-    print(train_test_data[0].keys())
-    keynames = ["element", "features", "target"]
-    train_test_database = easyDatabase(*keynames)
-    for i in range(len(train_test_data)):
-        key_dict = {key: train_test_data[i][key] for key in keynames}
-        _, _, y_train, y_test = train_test_data[i]["train_test"]
-        values = {"y_train": y_train, "y_test": y_test}
-        train_test_database.add(values, **key_dict)
-
-    search_dict = {"element": "Cu", "features": ["xanes"], "target": "cn"}
-    out = train_test_database.filter_data(search_dict)
-    print(out.value["y_train"])
-
-    # main(
-#     None,
-#     "results-40.pkl",
-#     "train-test-data-40.pkl",
-#     "data-split-track-40.pkl",
-#     40,
-# )
+    with open("newest_combined_data.pkl", "wb") as f:
+        pickle.dump(out, f)

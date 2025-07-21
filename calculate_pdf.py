@@ -49,7 +49,10 @@ def get_pdf(structure_dict, element, u=0.007, rmax=10.0, qmax=30.0):
     diff_x_pdf_calculator = PDFCalculator(rmax=rmax, qmax=qmax)
     diff_x_pdf_calculator.setTypeMask(element, "all", False)
     diff_x_pdf = diff_x_pdf_calculator(structure_diffpy)
-    diff_x_pdf = [x_pdf[0], list(np.array(x_pdf[1]) - np.array(diff_x_pdf[1]))]  # r, pdf
+    diff_x_pdf = [
+        x_pdf[0],
+        list(np.array(x_pdf[1]) - np.array(diff_x_pdf[1])),
+    ]  # r, pdf
 
     neutron_pdf_calculator = PDFCalculator(rmax=rmax, qmax=qmax)
     neutron_pdf_calculator.scatteringfactortable = "neutron"
@@ -58,11 +61,16 @@ def get_pdf(structure_dict, element, u=0.007, rmax=10.0, qmax=30.0):
     diff_n_pdf_calculator.setTypeMask(element, "all", False)
     diff_n_pdf_calculator.scatteringfactortable = "neutron"
     diff_n_pdf = diff_n_pdf_calculator(structure_diffpy)
-    diff_n_pdf = [n_pdf[0], list(np.array(n_pdf[1]) - np.array(diff_n_pdf[1]))]  # r, pdf
+    diff_n_pdf = [
+        n_pdf[0],
+        list(np.array(n_pdf[1]) - np.array(diff_n_pdf[1])),
+    ]  # r, pdf
     return x_pdf, n_pdf, diff_x_pdf, diff_n_pdf
 
 
-def sample_pdf(pdf, offset=0, force_length=None, qmax=30, rmax=10, verbose=False):
+def sample_pdf(
+    pdf, offset=0, force_length=None, qmax=30, rmax=10, verbose=False
+):
     """Sample the PDF to expected length.
 
     Expected length is calculated according to Nyquist-Shannon grid
@@ -98,7 +106,13 @@ def sample_pdf(pdf, offset=0, force_length=None, qmax=30, rmax=10, verbose=False
 
 
 def add_pdf_to_datasets(
-    load_name, save_name, element, force_length=100, u=0.007, rmax=10.0, qmax=30.0
+    load_name,
+    save_name,
+    element,
+    force_length=100,
+    u=0.007,
+    rmax=10.0,
+    qmax=30.0,
 ):
     """Add x_pdf, n_pdf, diff_x_pdf, diff_n_pdf to the constructed datasets.
 
@@ -122,10 +136,14 @@ def add_pdf_to_datasets(
         #        print(doc['formula_pretty'])
         #        print(doc['my_coordination_number'])
         try:
-            pdfs = get_pdf(doc["structure"], element=element, u=u, rmax=rmax, qmax=qmax)
+            pdfs = get_pdf(
+                doc["structure"], element=element, u=u, rmax=rmax, qmax=qmax
+            )
         except ValueError:
             for i in range(len(names)):
-                doc[names[i]] = None  # None for features for which pdf can't be computed
+                doc[names[i]] = (
+                    None  # None for features for which pdf can't be computed
+                )
             continue
 
         for i in range(len(pdfs)):
@@ -152,16 +170,22 @@ if __name__ == "__main__":
 
     example_dir = "example_datasets"
     example_path = [
-        os.path.join(example_dir, file_names[i]) for i in range(len(file_names))
+        os.path.join(example_dir, file_names[i])
+        for i in range(len(file_names))
     ]
 
     dump_dir = "datasets"
-    dump_path = [os.path.join(dump_dir, file_names[i]) for i in range(len(file_names))]
+    dump_path = [
+        os.path.join(dump_dir, file_names[i]) for i in range(len(file_names))
+    ]
 
     for i in range(len(elements)):
         start = time.time()
         add_pdf_to_datasets(
-            example_path[i], dump_path[i], element=elements[i], force_length=200
+            example_path[i],
+            dump_path[i],
+            element=elements[i],
+            force_length=200,
         )
         end = time.time()
         print("iter {} finished. Cost {} seconds".format(i, end - start))
