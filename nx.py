@@ -12,11 +12,14 @@ file_names = [
     element + "_collection.json" for element in elements
 ]  # filename or path to the collection
 load_dir = "datasets"
+# load_dir = "datasets_with_secbl"
 load_path = [
     os.path.join(load_dir, file_names[i]) for i in range(len(file_names))
 ]
 
 targets = ["cs", "cn", "bl"]
+# targets = ["bl_2nd"]
+# targets = ["cs", "cn", "bl", "bl_2nd"]
 
 features = [
     ["x_pdf", "n_pdf"],
@@ -31,18 +34,18 @@ features = [
     ["xanes", "diff_x_pdf"],
 ]
 
-n_estimators = [25, 50, 100, 200, 300]
-max_features = [10, 15, 20, 25, 30, 35]
-default_model_params = {
-    "n_estimators": n_estimators,
-    "max_features": max_features,
+rf_model_params = {
+    "n_estimators": [25, 50, 100, 200, 300],
+    "max_features": [10, 15, 20, 25, 30, 35],
+}
+
+knn_model_params = {
+    "n_neighbors": [5, 15, 25, 35, 45, 55, 65, 75],
+    "weights": ["uniform", "distance"],
 }
 
 
-def main(
-    training_history="combined_data.pkl",
-    random_seed=40,
-):
+def main(training_history="combined_data.pkl", random_seed=40, rf_or_knn="rf"):
     """
 
     Perform the training using configurations from `conf.py`.
@@ -64,12 +67,17 @@ def main(
         split_database.add_member(keynames, keys, value)
     train_test_valuekeys = ["train_test"]
     train_test_database = easyDatabase(keynames)
-    for k in range(len(train_test_data)):
+   for k in range(len(train_test_data)):
         keys = [train_test_data[k][key] for key in keynames]
         value = {key: train_test_data[k][key] for key in train_test_valuekeys}
         train_test_database.add_member(keynames, keys, value)
 
-    fea_tar_model = generate_fea_tar_model(features, targets)
+    if rf_or_knn == "rf":
+        fea_tar_model = generate_fea_tar_model(features, targets)
+        default_model_params = rf_model_params
+    elif rf_or_knn == "knn":
+        fea_tar_model = generate_fea_tar_model(features, targets, method="knn")
+        default_model_params = knn_model_params
     total_start = time.time()
     total_outs = []
 
@@ -108,7 +116,7 @@ def main(
                 model_params = default_model_params
                 findit = False
 
-            # # findit = False  # Retrain
+            findit = False  # Retrain
             if findit:
                 print(
                     "Use trained parameters. Params: {}".format(model_params)
@@ -124,15 +132,22 @@ def main(
                 y_train=y_train,
                 y_test=y_test,
                 tune_hyper=tune_hyper,
+                rf_or_knn=rf_or_knn,
                 **fea_tar_model[k]
             )
             out = {}
             out["train_scores"] = train_outcome[0][0]
             out["test_scores"] = train_outcome[0][1]
-            out["importances"] = train_outcome[1]
-            out["model_params"] = train_outcome[2]
-            if len(train_outcome) == 4:
-                out["y_pred"] = train_outcome[3]
+            if rf_or_knn == "rf":
+                out["importances"] = train_outcome[1]
+                out["model_params"] = train_outcome[2]
+                if len(train_outcome) == 4:
+                    out["y_pred"] = train_outcome[3]
+            elif rf_or_knn == "knn":
+                out["model_params"] = train_outcome[1]
+                if len(train_outcome) == 3:
+                    out["y_pred"] = train_outcome[2]
+
             out["element"] = ele
             out["features"] = fea
             out["target"] = tar
@@ -149,12 +164,20 @@ def main(
     print("Total {} seconds".format(time.time() - total_start))
 
     keynames = ["target", "element", "features"]
-    result_valuekeys = [
-        "train_scores",
-        "test_scores",
-        "importances",
-        "model_params",
-    ]
+    if rf_or_knn == "rf":
+        result_valuekeys = [
+            "train_scores",
+            "test_scores",
+            "importances",
+            "model_params",
+        ]
+    elif rf_or_knn == "knn":
+        result_valuekeys = [
+            "train_scores",
+            "test_scores",
+            "model_params",
+        ]
+
     result_database = easyDatabase(keynames)
     for k in range(len(total_outs)):
         keys = [total_outs[k][key] for key in keynames]
@@ -168,9 +191,10 @@ def main(
 
 
 if __name__ == "__main__":
-    out = main(
-        "combined_data.pkl",
-        40,
-    )
-    with open("newest_combined_data.pkl", "wb") as f:
+    out = main("combined_data.pkl", 40, "knn")
+    # # Total 6830.655294418335 seconds for bl_2nd
+    # with open("bl2nd_combined_data.pkl", "wb") as f:
+    #     pickle.dump(out, f)
+
+    with open("knn_combined_data", "wb") as f:
         pickle.dump(out, f)

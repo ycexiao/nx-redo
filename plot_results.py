@@ -4,6 +4,9 @@ from ml import convert_features_name
 import numpy as np
 from scipy.signal import find_peaks
 import pickle
+import matplotlib
+
+matplotlib.use("TkAgg")
 
 targets = ["cs", "cn", "bl"]
 elements = ["Ti", "Cu", "Fe", "Mn"]
@@ -19,11 +22,13 @@ plot_features = [
     ["nx_pdf"],
     ["x_pdf", "n_pdf"],
     ["xanes", "n_pdf"],
+    ["xanes", "x_pdf"],
     ["xanes", "nx_pdf"],
     ["xanes", "x_pdf", "n_pdf"],
 ]
 
 baseline_features = [
+    ["n_pdf"],
     ["x_pdf"],
     ["xanes"],
     ["xanes", "diff_x_pdf"],
@@ -80,7 +85,6 @@ def results_plot(
             data = results_database.filter_data(
                 ["target", "element", "features"],
                 [target, elements[j], baseline_features[k]],
-
             ).value
             scores.append(np.mean(data["test_scores"]))
             errors.append(np.std(data["test_scores"]))
@@ -98,35 +102,30 @@ def results_plot(
                 axes[j].set_ylim(*ylim)
     for j in range(len(elements)):
         axes[j].set_title(elements[j])
-        axes[j].set_xticks(range(len(plot_features)))
+        axes[j].set_xticks(np.arange(len(plot_features)) + 1)
         axes[j].set_xticklabels(
             convert_features_name(plot_features), rotation=45, ha="right"
-            )
-        axes[j].set_ylabel(ylabel)
+        )
+        if j == 0:
+            axes[j].set_ylabel(ylabel)
+        else:
+            axes[j].set_yticks([])
 
     # setp
     prop_cycle = plt.rcParams["axes.prop_cycle"]
     colors = prop_cycle.by_key()["color"]
-    # plt.setp(hls, color=colors[1])
-    # fig.legend([hls[0]], ["XANES+dPDF"], bbox_to_anchor=(0.98, 0.88))
-    plt.subplots_adjust(left=0.1, right=0.5, top=0.9, bottom=0.1)
-    # fig.subplots_adjust(wspace=0.2, hspace=0.3)
     fig.suptitle(title, fontsize=18)
-    plt.legend()
     plt.tight_layout()
 
 
 ## feature importance plot
 def feature_importance_plot(results_database, tar, title):
     plot_features = [
-        ["x_pdf"],
         ["x_pdf", "n_pdf"],
         ["nx_pdf"],
         ["xanes"],
-        ["xanes", "x_pdf"],
         ["xanes", "n_pdf"],
         ["xanes", "nx_pdf"],
-        ["xanes", "diff_x_pdf"],
         ["xanes", "x_pdf", "n_pdf"],
     ]
     prop_cycle = plt.rcParams["axes.prop_cycle"]
@@ -146,7 +145,7 @@ def feature_importance_plot(results_database, tar, title):
             data = results_database.filter_data(
                 ["target", "features", "element"],
                 [tar, plot_features[j], elements[k]],
-                ).value
+            ).value
             importances = data["importances"]
             axes[j, k].plot(
                 range(len(importances[0])),
@@ -183,30 +182,32 @@ def feature_importance_plot(results_database, tar, title):
                 )
 
     fig.suptitle(title, fontsize=18)
-    plt.tight_layout()
     plt.subplots_adjust(left=0.15, right=0.9, top=0.9, bottom=0.15)
 
 
 if __name__ == "__main__":
-    data_path = "newest_combined_data.pkl"
-    with open(data_path, "rb") as f:
-        data = pickle.load(f)
+    # data_path = "newest_combined_data.pkl"
+    # with open(data_path, "rb") as f:
+    # data = pickle.load(f)
+    # results_database = data["results"]
 
-    results_database = data["results"]
+    ## add xanes_npdf into results-40-database
     # xanes_npdf_database = result1easyDatabase(result_data)
-
     # filename = "results-40-in-database.pkl"
     # with open(filename, "rb") as f:
     # results_database = pickle.load(f)
     # results_database.keynames = results_database.members[0].get_keynames()
-
     # results_database = results_database.combine(xanes_npdf_database)
     # tmp = results_database.filter_data(
     #     {"target": "bl", "element": "Ti", "features": ["xanes", "n_pdf"]}
     # )
     # print(tmp.value)
 
-    # result plot
+    filename = "combined_data.pkl"
+    filename = "newest_combined_data.pkl"
+    with open(filename, "rb") as f:
+        results_database = pickle.load(f)
+    results_database = results_database["results"]
     run_kwargs = [
         {
             "tar": "cs",
@@ -224,20 +225,119 @@ if __name__ == "__main__":
             "tar": "bl",
             "title": "Bond Length",
             "ylabel": "RMSE (% mean BL)",
-            "ylim": None,
+            "ylim": [0, 0.06],
         },
     ]
-    for kwarg in run_kwargs:
+    save_file_names = [
+        "result_cs.png",
+        "result_cn.png",
+        "result_bl.png",
+    ]
+    for i, kwarg in enumerate(run_kwargs):
         results_plot(results_database, **kwarg)
-        plt.legend(bbox_to_anchor=(1.35, 1.16))
+        legends = [
+            ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
+        ]
+        plt.tight_layout()
+        pars = plt.gcf().subplotpars
+        plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
+        plt.legend(bbox_to_anchor=(1.2, 1.23))
+        plt.savefig("imgs/" + save_file_names[i])
     plt.show()
 
     # importance plot
     # imp_kwargs = [
-        # {"tar": "cs", "title": "Oxidation State"},
-        # {"tar": "cn", "title": "Coordination Number"},
-        # {"tar": "bl", "title": "Bond Length"},
+    #     {"tar": "cs", "title": "Oxidation State"},
+    #     {"tar": "cn", "title": "Coordination Number"},
+    #     {"tar": "bl", "title": "Bond Length"},
     # ]
     # for kwarg in imp_kwargs:
-        # feature_importance_plot(results_database, **kwarg)
+    #     feature_importance_plot(results_database, **kwarg)
     # plt.show()
+
+    ## Second Shell
+    # data_path = "bl2nd_combined_data.pkl"
+    # with open(data_path, "rb") as f:
+    #     data = pickle.load(f)
+    # results_database = data["results"]
+
+    # plot_kwargs = {
+    #     "tar": "bl_2nd",
+    #     "title": "Second Shell Mean Length - RF",
+    #     "ylim": [0, 0.08],
+    # }
+    # results_plot(results_database, **plot_kwargs)
+
+    # legends = [
+    #     ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
+    # ]
+    # plt.tight_layout()
+    # pars = plt.gcf().subplotpars
+    # plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
+    # plt.legend(bbox_to_anchor=(1.2, 1.23))
+    # plt.show()
+    # plt.savefig("imgs/second_shell_rf.png")
+
+    ## Second Shell knn
+    # data_path = "knn_bl2nd_combined_data"
+    # with open(data_path, "rb") as f:
+    #     data = pickle.load(f)
+    # results_database = data["results"]
+
+    # plot_kwargs = {
+    #     "tar": "bl_2nd",
+    #     "title": "Second Shell Mean Length - kNN",
+    #     "ylim": [0, 0.08],
+    # }
+    # results_plot(results_database, **plot_kwargs)
+
+    # legends = [
+    #     ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
+    # ]
+    # plt.tight_layout()
+    # pars = plt.gcf().subplotpars
+    # plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
+    # plt.legend(bbox_to_anchor=(1.2, 1.23))
+    # plt.savefig("imgs/second_shell_knn.png")
+
+    # result plot knn
+    # filename = "combined_data.pkl"
+    # filename = "knn_combined_data"
+    # with open(filename, "rb") as f:
+    #     results_database = pickle.load(f)
+    # results_database = results_database["results"]
+    # save_file_names = [
+    #     "result_cs_knn.png",
+    #     "result_cn_knn.png",
+    #     "result_bl_knn.png",
+    # ]
+    # run_kwargs = [
+    #     {
+    #         "tar": "cs",
+    #         "title": "Oxidation State - kNN",
+    #         "ylabel": "weighted mean F1 score",
+    #         "ylim": [0, 1],
+    #     },
+    #     {
+    #         "tar": "cn",
+    #         "title": "Coordination Number - kNN",
+    #         "ylabel": "weighted mean F1 score",
+    #         "ylim": [0, 1],
+    #     },
+    #     {
+    #         "tar": "bl",
+    #         "title": "Bond Length - kNN",
+    #         "ylabel": "RMSE (% mean BL)",
+    #         "ylim": [0, 0.06],
+    #     },
+    # ]
+    # for i, kwarg in enumerate(run_kwargs):
+    #     results_plot(results_database, **kwarg)
+    #     legends = [
+    #         ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
+    #     ]
+    #     plt.tight_layout()
+    #     pars = plt.gcf().subplotpars
+    #     plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
+    #     plt.legend(bbox_to_anchor=(1.2, 1.23))
+    #     plt.savefig("imgs/" + save_file_names[i])

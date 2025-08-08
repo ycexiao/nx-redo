@@ -6,12 +6,13 @@ from sklearn.model_selection import (
 )
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import f1_score, root_mean_squared_error, make_scorer
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 import time
 import pandas as pd
 import json
 
 
-def generate_fea_tar_model(features, target):
+def generate_fea_tar_model(features, target, method="rf"):
     """
     Generate a list of feature-target model configurations.
     """
@@ -20,15 +21,24 @@ def generate_fea_tar_model(features, target):
         for i in range(len(features))
         for j in range(len(target))
     ]
+    if method == "rf":
+        reg_model = RandomForestRegressor()
+        cls_model = RandomForestClassifier()
+    elif method == "knn":
+        reg_model = KNeighborsRegressor()
+        cls_model = KNeighborsClassifier()
+    else:
+        raise ValueError(f"Can not recognize the model {method}")
+
     for i in range(len(fea_tar_model)):
-        if fea_tar_model[i]["target"] == "bl":
-            fea_tar_model[i]["model"] = RandomForestRegressor()
+        if "bl" in fea_tar_model[i]["target"]:
+            fea_tar_model[i]["model"] = reg_model
             fea_tar_model[i]["score_method"] = make_scorer(
                 lambda y_true, y_pred: root_mean_squared_error(y_true, y_pred)
                 / np.mean(y_true)
             )
         else:
-            fea_tar_model[i]["model"] = RandomForestClassifier()
+            fea_tar_model[i]["model"] = cls_model
             fea_tar_model[i]["score_method"] = make_scorer(
                 lambda y_true, y_pred: f1_score(
                     y_true, y_pred, average="weighted"
@@ -71,14 +81,19 @@ def has_enough_components(Y):
     return mask.astype("bool")
 
 
-def build_train_test_data(elements, load_path, features, target, rseed):
+def build_train_test_data(
+    elements, load_path, features, targets=["cs", "cn", "bl"], rseed=40
+):
     out = []
     track_data_split = []
     for i in range(len(elements)):
         print("Start train-test-split on element {}".format(elements[i]))
-        X, Y, mp_ids, mask = get_model_data(load_path[i])
+        X, Y, mp_ids, mask = get_model_data(load_path[i], targets)
 
         mask = np.all(~np.isnan(Y), axis=1)
+        X, Y, mp_ids = X[mask], Y[mask], mp_ids[mask]
+
+        mask = np.all(~np.isnan(X), axis=1)
         X, Y, mp_ids = X[mask], Y[mask], mp_ids[mask]
 
         mask = has_enough_components(Y)
@@ -87,8 +102,8 @@ def build_train_test_data(elements, load_path, features, target, rseed):
         X = pd.DataFrame(X, index=mp_ids)
         Y = pd.DataFrame(Y, index=mp_ids)
         for j in range(len(features)):
-            for k in range(len(target)):
-                if target[k] in ["cs", "cn"]:
+            for k in range(len(targets)):
+                if targets[k] in ["cs", "cn"]:
                     X_train, X_test, y_train, y_test = train_test_split(
                         X, Y, random_state=rseed, stratify=Y.iloc[:, k]
                     )
@@ -102,7 +117,7 @@ def build_train_test_data(elements, load_path, features, target, rseed):
                 tmp = {}
                 tmp["element"] = elements[i]
                 tmp["features"] = features[j]
-                tmp["target"] = target[k]
+                tmp["target"] = targets[k]
                 tmp["train_test"] = (
                     constructed_X_train,
                     constructed_X_test,
@@ -114,7 +129,7 @@ def build_train_test_data(elements, load_path, features, target, rseed):
                 tmp_track = {}
                 tmp_track["element"] = elements[i]
                 tmp_track["features"] = features[j]
-                tmp_track["target"] = target[k]
+                tmp_track["target"] = targets[k]
                 tmp_track["train_mp_ids"] = y_train.index.to_list()
                 tmp_track["test_mp_ids"] = y_test.index.to_list()
                 track_data_split.append(tmp_track)
@@ -122,7 +137,7 @@ def build_train_test_data(elements, load_path, features, target, rseed):
     return out, track_data_split
 
 
-def get_model_data(data_path):
+def get_model_data(data_path, targets=["cs", "cn", "bl"]):
     """Get data from datasets and do some basic data filtering.
 
     Parameters
@@ -146,7 +161,7 @@ def get_model_data(data_path):
     diff_x_pdf = np.zeros([len(docs), len(docs[0]["diff_x_pdf"])])
     diff_n_pdf = np.zeros([len(docs), len(docs[0]["diff_n_pdf"])])
 
-    Y = np.zeros([len(docs), 3])
+    Y = np.zeros([len(docs), len(targets)])
 
     ids = []
 
@@ -159,9 +174,8 @@ def get_model_data(data_path):
             n_pdf[i] = docs[i]["n_pdf"]
             diff_x_pdf[i] = docs[i]["diff_x_pdf"]
             diff_n_pdf[i] = docs[i]["diff_n_pdf"]
-            Y[i, 0] = docs[i]["cs"]
-            Y[i, 1] = docs[i]["cn"]
-            Y[i, 2] = docs[i]["bl"]
+            for j in range(len(targets)):
+                Y[i, j] = docs[i][targets[j]]
             masks[i] = 1
             ids.append(docs[i]["mp_id"])
         except ValueError:
@@ -282,6 +296,7 @@ def train_model_hyper(
     grid.fit(X, y)
     if show:
         pass
+    print(f"Best params found by GridSearch: {grid.best_params_}")
     return grid.best_params_
 
 
@@ -290,6 +305,7 @@ def train_model(
     X_test,
     y_train,
     y_test,
+    rf_or_knn,
     model,
     features,
     target,
@@ -346,7 +362,7 @@ def train_model(
         )
 
     importances = np.zeros([n_itr, X_train.shape[1]])
-    if target == "bl":
+    if "bl" in target:
         y_pred = np.zeros([n_itr + 1, len(y_test)])
         y_pred[0] = y_test
     rseed = 40
@@ -355,7 +371,9 @@ def train_model(
         start = time.time()
 
         model.set_params(**model_params)
-        model.set_params(random_state=rseed + i)
+        print(rf_or_knn)
+        if rf_or_knn == "rf":
+            model.set_params(random_state=rseed + i)
         model.fit(X_train, y_train)
 
         test_scores.append(
@@ -364,7 +382,7 @@ def train_model(
         train_scores.append(
             score_method(estimator=model, X=X_train, y_true=y_train)
         )
-        if target == "bl":
+        if "bl" in "target":
             y_pred[i + 1] = model.predict(X_test)
 
         end = time.time()
@@ -373,14 +391,20 @@ def train_model(
                 i, end - start, test_scores[-1]
             )
         )
-        importances[i] = model.feature_importances_
+        if rf_or_knn == "rf":
+            importances[i] = model.feature_importances_
 
     scores = np.array([train_scores, test_scores])
 
-    if target == "bl":
-        return scores, importances, model_params, y_pred
+    if rf_or_knn == "rf":
+        if "bl" in target:
+            return scores, importances, model_params, y_pred
+        return scores, importances, model_params
 
-    return scores, importances, model_params
+    elif rf_or_knn == "knn":
+        if "bl" in target:
+            return scores, model_params, y_pred
+        return scores, model_params
 
 
 if __name__ == "__main__":
