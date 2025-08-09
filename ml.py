@@ -29,7 +29,7 @@ def generate_fea_tar_model(features, target, model_type="rf"):
         reg_model = KNeighborsRegressor()
         cls_model = KNeighborsClassifier()
     else:
-        raise ValueError(f"Can not recognize the model {method}")
+        raise ValueError(f"Can not recognize the model {model_type}")
 
     for i in range(len(fea_tar_model)):
         if "bl" in fea_tar_model[i]["target"]:

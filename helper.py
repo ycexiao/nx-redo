@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 from collections import OrderedDict
 import pickle
 
+
 class resultEntry:
     def __init__(self, keys_dict, value):
         ordered_keys = [(item[0], item[1]) for item in keys_dict.items()]
@@ -30,18 +31,25 @@ class resultDatabase:
         for i, entry in enumerate(self.entries):
             self.list_of_keys.append(entry.keys)
 
-    def from_pkl(self, pkl_obj, description=""):
+    def from_pkl(self, pkl_obj, description="", ignore_duplicate=False):
         db = resultDatabase(self.keynames, description=description)
         for doc in pkl_obj:
-            keys_dict = {k: doc[k] for k in self.keynames}
-            values = {key:value for key, value in doc.items() if key not in self.keynames}
-            db.add_entry(keys_dict, values)
+            key_dict = {k: doc[k] for k in self.keynames}
+            values = {
+                key: value
+                for key, value in doc.items()
+                if key not in self.keynames
+            }
+            db.add_entry(key_dict, values, ignore_duplicate=ignore_duplicate)
         return db
 
     def to_pkl(self, name=None):
         docs = []
         for entry in self.entries:
-            doc = {entry.keynames[i]: entry.keys[i] for i in range(len(entry.keynames))}
+            doc = {
+                entry.keynames[i]: entry.keys[i]
+                for i in range(len(entry.keynames))
+            }
             if isinstance(entry.value, dict):
                 for key, value in entry.value.items():
                     doc[key] = value
@@ -49,10 +57,10 @@ class resultDatabase:
                 doc["value"] = entry.value
             docs.append(doc)
         if name is None:
-            name = f"result_database_{int(self.timestamp)}.json"
-        pickle.dump(docs, open(name, "w"))
+            name = f"result_database_{int(self.timestamp)}.pkl"
+        pickle.dump(docs, open(name, "wb"))
 
-    def add_entry(self, keys_dict, value):
+    def add_entry(self, keys_dict, value, ignore_duplicate=False):
         """
         Add a entry into the datbase.
 
@@ -63,6 +71,8 @@ class resultDatabase:
             e.g. {"name":"Alice", "height":170}.
         value: object
             Any object stored in this entry.
+        ignore_duplicate: bool, default False
+            If True, ignore the duplicate entry and do not raise an error.
 
         Returns
         -------
@@ -76,7 +86,7 @@ class resultDatabase:
         >> entry_value = 0.999
         >> database.add_entry(entry_keys, entry_value)
         """
-        ordered_keys = [(item[0], item) for item in keys_dict.items()]
+        ordered_keys = [(item[0], item[1]) for item in keys_dict.items()]
         ordered_keys_dict = OrderedDict(
             sorted(ordered_keys, key=lambda x: x[0])
         )
@@ -85,21 +95,25 @@ class resultDatabase:
             raise ValueError(f"{keynames} doesn't match with {self.keynames}")
         entry = resultEntry(ordered_keys_dict, value)
         if entry.keys in self.list_of_keys:
-            raise KeyError(f"{entry.keys} already exists")
+            msg = f"{entry.keys} already exists"
+            if not ignore_duplicate:
+                raise KeyError(msg)
+            else:
+                print(msg)
+                return
         self.list_of_keys.append(entry.keys)
         self.entries.append(entry)
 
     def filter_data(self, keynames, keys):
-        actual_keys = []
-        try:
-            for keyname in self.keynames:
-                actual_keys.append(keys[keynames.index(keyname)])
-        except ValueError:
+        tmp = [(keynames[i], keys[i]) for i in range(len(keynames))]
+        tmp = sorted(tmp, key=lambda x: x[0])
+        keynames = [item[0] for item in tmp]
+        keys = [item[1] for item in tmp]
+        if keynames != self.keynames:
             raise ValueError(f"{keynames} doesn't match with {self.keynames}")
-        self._update_list_of_keys()
         indx = list(
             filter(
-                lambda ind: self.entries[ind].keys == actual_keys,
+                lambda ind: self.entries[ind].keys == keys,
                 range(len(self.entries)),
             )
         )
