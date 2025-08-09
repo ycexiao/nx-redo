@@ -2,35 +2,70 @@ import numpy as np
 import copy
 import time
 from matplotlib import pyplot as plt
+from collections import OrderedDict
 
 
-class easyMember:
-    def __init__(self, keynames, keys, value):
+class resultEntry:
+    def __init__(self, keys_dict, value):
+        ordered_keys = [(item[0], item[1]) for item in keys_dict.items()]
+        ordered_keys_dict = OrderedDict(
+            sorted(ordered_keys, key=lambda x: x[0])
+        )
+        keynames = list(ordered_keys_dict.keys())
+        keys = list(ordered_keys_dict.values())
         self.keynames = keynames
         self.keys = keys
         self.value = value
 
 
-class easyDatabase:
+class resultDatabase:
     def __init__(self, keynames, description=""):
-        self.keynames = keynames
-        self.members = []
+        self.keynames = sorted(keynames)
+        self.entries = []
         self.list_of_keys = []
         self.timestamp = time.time()
 
     def _update_list_of_keys(self):
         self.list_of_keys = []
-        for i, member in enumerate(self.members):
-            self.list_of_keys.append(member.keys)
+        for i, entry in enumerate(self.entries):
+            self.list_of_keys.append(entry.keys)
 
-    def add_member(self, keynames, keys, value):
+    def add_entry(self, keys_dict, value):
+        """
+        Add a entry into the datbase.
+
+        Parameters
+        ----------
+        keys_dict : dict
+            A dict contains the corresponding keys and key values.
+            e.g. {"name":"Alice", "height":170}.
+        value: object
+            Any object stored in this entry.
+
+        Returns
+        -------
+            None
+
+        Examples
+        --------
+        >> keynames = ["training set", "model"]
+        >> database = resultDatabase(keynames)
+        >> entry_keys = {"training set": "Ti", "model": "Random Forest"}
+        >> entry_value = 0.999
+        >> database.add_entry(entry_keys, entry_value)
+        """
+        ordered_keys = [(item[0], item[1]) for item in keys_dict.items()]
+        ordered_keys_dict = OrderedDict(
+            sorted(ordered_keys, key=lambda x: x[0])
+        )
+        keynames = list(ordered_keys_dict.keys())
         if keynames != self.keynames:
-            raise ValueError(f"f{keynames} doesn't match with {self.keynames}")
-        member = easyMember(keynames, keys, value)
-        if member.keys in self.list_of_keys:
+            raise ValueError(f"{keynames} doesn't match with {self.keynames}")
+        entry = resultEntry(ordered_keys_dict, value)
+        if entry.keys in self.list_of_keys:
             raise KeyError(f"f{keys.values()} already exists")
-        self.list_of_keys.append(member.keys)
-        self.members.append(member)
+        self.list_of_keys.append(entry.keys)
+        self.entries.append(entry)
 
     def filter_data(self, keynames, keys):
         actual_keys = []
@@ -42,13 +77,13 @@ class easyDatabase:
         self._update_list_of_keys()
         indx = list(
             filter(
-                lambda ind: self.members[ind].keys == actual_keys,
-                range(len(self.members)),
+                lambda ind: self.entries[ind].keys == actual_keys,
+                range(len(self.entries)),
             )
         )
         if len(indx) == 0:
             raise KeyError(f"Unable to find {keys} in the database.")
-        return self.members[indx[0]]
+        return self.entries[indx[0]]
 
     def combine(self, another_databse):
         if self.keynames != another_databse.keynames:
@@ -58,10 +93,10 @@ class easyDatabase:
                 f"{another_databse.keynames}"
             )
         copied_original_database = copy.deepcopy(self)
-        for member in another_databse.members:
-            if member.keys not in copied_original_database.list_of_keys:
-                copied_original_database.members.append(member)
-                copied_original_database.list_of_keys.append(member.keys)
+        for entry in another_databse.entries:
+            if entry.keys not in copied_original_database.list_of_keys:
+                copied_original_database.entries.append(entry)
+                copied_original_database.list_of_keys.append(entry.keys)
         copied_original_database._update_list_of_keys()
         return copied_original_database
 
@@ -72,8 +107,8 @@ class easyDatabase:
                 f"But the current length is {len(new_keynames)}."
             )
         self.keynames = new_keynames
-        for member in self.members:
-            member.keynames = new_keynames
+        for entry in self.entries:
+            entry.keynames = new_keynames
 
     def unique_keys(self):
         self._update_list_of_keys()
@@ -175,6 +210,12 @@ class SmartPloter:
 
 if __name__ == "__main__":
     pass
+    # keynames = ["training set", "model"]
+    # database = resultDatabase(keynames)
+    # entry_keys = {"training set": "Ti", "model": "Random Forest"}
+    # entry_value = 0.999
+    # database.add_entry(entry_keys, entry_value)
+
     # keynames = ["name", "age"]
     # history = easyHistory(keynames, "A test for database with memory")
     # for i in range(10):
