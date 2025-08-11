@@ -65,7 +65,8 @@ def main(trained_database, random_seed=40, model_type="rf"):
             )
             try:
                 model_params = trained_database.filter_data(
-                    ["element", "features", "target", "model_type"], [ele, fea, tar, model_type]
+                    ["element", "features", "target", "model_type"],
+                    [ele, fea, tar, model_type],
                 ).value["model_params"]
                 print(
                     "Use trained parameters. Params: {}".format(model_params)
@@ -98,7 +99,7 @@ def main(trained_database, random_seed=40, model_type="rf"):
             total_outs.append(out)
             print(
                 "{}/{} round finished, cost {} seconds in this round.".format(
-                    j + i * len(fea_tar_model)+1,
+                    j + i * len(fea_tar_model) + 1,
                     len(fea_tar_model) * len(elements),
                     time.time() - round_start,
                 )
@@ -140,4 +141,3 @@ if __name__ == "__main__":
 
     out = main(trained_database, 40, "rf")
     # out.to_pkl()
-
