@@ -82,7 +82,7 @@ def results_plot(
     title="Oxidation states",
     ylabel="F1 score",
     ylim=[0, 1],
-    save_name=None,
+    fname=None,
 ):
     fig, axes = plt.subplots(1, len(elements), figsize=(11.2, 6.4))
     baseline_names = convert_features_name(baseline_features)
@@ -146,8 +146,37 @@ def results_plot(
     pars = plt.gcf().subplotpars
     plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
     plt.tight_layout()
-    if save_name:
-        plt.savefig(save_name)
+    if fname:
+        plt.savefig(fname)
+
+
+def feature_importance_plot_one(ax, importances, ylim=None):
+    ax.plot(
+        range(len(importances[0])),
+        *importances,
+        alpha=0.2,
+    )
+    means = np.mean(importances, axis=0)
+    for h in range(int(len(means) // 100)):
+        ax.plot(
+            np.arange(h * 100, h * 100 + 100),
+            means[h * 100 : h * 100 + 100],
+        )
+    peaks, _ = find_peaks(means, height=0.02)
+    if ylim:
+        ax.set_ylim(ylim)
+    else:
+        ylim = ax.get_ylim()
+    ax.set_xlim([0, 300])
+    for ind in peaks:
+        ax.vlines(
+            np.arange(len(importances[0]))[ind],
+            *ylim,
+            linestyle="--",
+            linewidth=0.5,
+        )
+    ax.set_yticks([])
+    ax.set_xticks([0, 100, 200, 300])
 
 
 importances_plot_features = [
@@ -158,58 +187,40 @@ importances_plot_features = [
     ["xanes", "nx_pdf"],
     ["xanes", "x_pdf", "n_pdf"],
 ]
+
+
 ## feature importance plot
-def feature_importance_plot(results_database, tar, title, model_type="rf"):
+def feature_importance_plot(
+    results_database, tar, title, model_type="rf", ylim=None, fname=None
+):
     feature_names = convert_features_name(importances_plot_features)
-    baseline_names = convert_features_name(baseline_features)
     fig, axes = plt.subplots(
-        len(importances_plot_features), len(elements), figsize=(12, 6)
+        len(importances_plot_features),
+        len(elements),
+        figsize=(12, 6),
+        sharex=True,
+        sharey=True,
     )
     for j in range(len(importances_plot_features)):
         for k in range(len(elements)):
-            keys_dict = {
-                "target": tar,
-                "features": importances_plot_features[j],
-                "element": elements[k],
-            }
             data = results_database.filter_data(
-                ["target", "features", "element"],
-                [tar, importances_plot_features[j], elements[k]],
+                ["target", "features", "element", "model_type"],
+                [tar, importances_plot_features[j], elements[k], model_type],
             ).value
             importances = data["importances"]
-            axes[j, k].plot(
-                range(len(importances[0])),
-                *importances,
-                alpha=0.2,
-            )
-            axes[j, k].set_xticks([])
-            means = np.mean(importances, axis=0)
-            for h in range(int(len(means) // 100)):
-                axes[j, k].plot(
-                    np.arange(h * 100, h * 100 + 100),
-                    means[h * 100 : h * 100 + 100],
-                )
-
-            peaks, _ = find_peaks(means, height=0.02)
-            ylim = axes[j, k].get_ylim()
-            axes[j, k].set_xlim([0, 300])
-            for ind in peaks:
-                axes[j, k].vlines(
-                    np.arange(len(importances[0]))[ind],
-                    *ylim,
-                    linestyle="--",
-                    linewidth=0.5,
-                )
+            feature_importance_plot_one(axes[j, k], importances, ylim=ylim)
 
             if j == 0:
                 axes[j, k].set_title(elements[k])
             if k == 0:
-                axes[j, k].set_ylabel(
-                    feature_names[j], rotation=45, ha="right"
-                )
+                axes[j, k].set_ylabel(feature_names[j], rotation=0, ha="right")
 
     fig.suptitle(title, fontsize=18)
-    plt.subplots_adjust(left=0.15, right=0.9, top=0.9, bottom=0.15)
+    plt.subplots_adjust(
+        left=0.2, right=0.9, top=0.9, bottom=0.1, wspace=0.2, hspace=0.2
+    )
+    if fname:
+        plt.savefig(fname)
 
 
 if __name__ == "__main__":
@@ -232,7 +243,7 @@ if __name__ == "__main__":
             "ylabel": "weighted mean F1 score",
             "ylim": [0, 1],
             "model_type": "rf",
-            "save_name": "imgs/result_cs_rf.pdf",
+            "save_name": "imgs/result_cs_rf.png",
         },
         {
             "tar": "cn",
@@ -240,7 +251,7 @@ if __name__ == "__main__":
             "ylabel": "weighted mean F1 score",
             "ylim": [0, 1],
             "model_type": "rf",
-            "save_name": "imgs/result_cn_rf.pdf",
+            "save_name": "imgs/result_cn_rf.png",
         },
         {
             "tar": "bl",
@@ -248,12 +259,12 @@ if __name__ == "__main__":
             "ylabel": r"RMSE (\% mean BL)",
             "ylim": [0, 0.06],
             "model_type": "rf",
-            "save_name": r"imgs/result_bl_rf.pdf",
+            "save_name": r"imgs/result_bl_rf.png",
         },
     ]
-    for kwarg in run_rf_kwargs:
-        results_plot(results_database, **kwarg)
-    plt.show()
+    # for kwarg in run_rf_kwargs:
+    #     results_plot(results_database, **kwarg)
+    # plt.show()
 
     run_knn_kwargs = [
         {
@@ -281,102 +292,33 @@ if __name__ == "__main__":
             "save_name": "imgs/result_bl_knn.pdf",
         },
     ]
-    for kwarg in run_knn_kwargs:
-        results_plot(results_database, **kwarg)
-    plt.show()
-    # importance plot
-    # imp_kwargs = [
-    #     {"tar": "cs", "title": "Oxidation State"},
-    #     {"tar": "cn", "title": "Coordination Number"},
-    #     {"tar": "bl", "title": "Bond Length"},
-    # ]
-    # for kwarg in imp_kwargs:
-    #     feature_importance_plot(results_database, **kwarg)
-    # plt.show()
-
-    ## Second Shell
-    # data_path = "bl2nd_combined_data.pkl"
-    # with open(data_path, "rb") as f:
-    #     data = pickle.load(f)
-    # results_database = data["results"]
-
-    # plot_kwargs = {
-    #     "tar": "bl_2nd",
-    #     "title": "Second Shell Mean Length - RF",
-    #     "ylim": [0, 0.08],
-    # }
-    # results_plot(results_database, **plot_kwargs)
-
-    # legends = [
-    #     ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
-    # ]
-    # plt.tight_layout()
-    # pars = plt.gcf().subplotpars
-    # plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
-    # plt.legend(bbox_to_anchor=(1.2, 1.23))
-    # plt.show()
-    # plt.savefig("imgs/second_shell_rf.png")
-
-    ## Second Shell knn
-    # data_path = "knn_bl2nd_combined_data"
-    # with open(data_path, "rb") as f:
-    #     data = pickle.load(f)
-    # results_database = data["results"]
-
-    # plot_kwargs = {
-    #     "tar": "bl_2nd",
-    #     "title": "Second Shell Mean Length - kNN",
-    #     "ylim": [0, 0.08],
-    # }
-    # results_plot(results_database, **plot_kwargs)
-
-    # legends = [
-    #     ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
-    # ]
-    # plt.tight_layout()
-    # pars = plt.gcf().subplotpars
-    # plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
-    # plt.legend(bbox_to_anchor=(1.2, 1.23))
-    # plt.savefig("imgs/second_shell_knn.png")
-
-    # result plot knn
-    # filename = "combined_data.pkl"
-    # filename = "knn_combined_data"
-    # with open(filename, "rb") as f:
-    #     results_database = pickle.load(f)
-    # results_database = results_database["results"]
-    # save_file_names = [
-    #     "result_cs_knn.png",
-    #     "result_cn_knn.png",
-    #     "result_bl_knn.png",
-    # ]
-    # run_kwargs = [
-    #     {
-    #         "tar": "cs",
-    #         "title": "Oxidation State - kNN",
-    #         "ylabel": "weighted mean F1 score",
-    #         "ylim": [0, 1],
-    #     },
-    #     {
-    #         "tar": "cn",
-    #         "title": "Coordination Number - kNN",
-    #         "ylabel": "weighted mean F1 score",
-    #         "ylim": [0, 1],
-    #     },
-    #     {
-    #         "tar": "bl",
-    #         "title": "Bond Length - kNN",
-    #         "ylabel": "RMSE (% mean BL)",
-    #         "ylim": [0, 0.06],
-    #     },
-    # ]
-    # for i, kwarg in enumerate(run_kwargs):
+    # for kwarg in run_knn_kwargs:
     #     results_plot(results_database, **kwarg)
-    #     legends = [
-    #         ax.legend() for ax in plt.gcf().axes if ax.get_legend() is not None
-    #     ]
-    #     plt.tight_layout()
-    #     pars = plt.gcf().subplotpars
-    #     plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
-    #     plt.legend(bbox_to_anchor=(1.2, 1.23))
-    #     plt.savefig("imgs/" + save_file_names[i])
+    # plt.show()
+
+    imp_kwargs = [
+        {
+            "tar": "cs",
+            "title": "Oxidation State",
+            "model_type": "rf",
+            "ylim": [-0.01, 0.1],
+            "fname": "imgs/importances_cs_rf.pdf",
+        },
+        {
+            "tar": "cn",
+            "title": "Coordination Number",
+            "model_type": "rf",
+            "ylim": [-0.01, 0.1],
+            "fname": "imgs/importances_cn_rf.pdf",
+        },
+        {
+            "tar": "bl",
+            "title": "Bond Length",
+            "model_type": "rf",
+            "ylim": [-0.01, 0.1],
+            "fname": "imgs/importances_bl_rf.pdf",
+        },
+    ]
+    for kwarg in imp_kwargs:
+        feature_importance_plot(results_database, **kwarg)
+    plt.show()
