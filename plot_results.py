@@ -3,6 +3,7 @@ from scipy.signal import find_peaks
 import pickle
 import random
 from pathlib import Path
+import json
 
 from helper import resultDatabase
 from ml import convert_features_name
@@ -11,16 +12,15 @@ import matplotlib
 from matplotlib import pyplot as plt
 from bg_mpl_stylesheets.styles import all_styles
 from bg_mpl_stylesheets.colors import Colors
+from cycler import cycler
+from itertools import cycle
 
 plt.style.use(all_styles["bg-style"])
-cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+cycle_color = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+bg_colors = {Colors(hex).name: hex for hex in cycle_color}
 
 matplotlib.use("TkAgg")
 # bg_blue,bg_red,bg_green,bg_light_blue,bg_light_grey,bg_yellow,bg_brown,bg_burgundy,bg_olive_green,bg_muted_olive,bg_beige,bg_grey
-# colors = {Colors(hex).name: hex for hex in cycle}
-# chosen_color_names = ["bg_light_blue", "bg_red", "bg_light_grey", "bg_yellow", "bg_olive_green", "bg_muted_olive", "bg_beige", "bg_grey"]
-# random.shuffle(chosen_color_names)
-# chosen_colors = [colors[name] for name in chosen_color_names]
 
 plot_features = [
     ["nx_pdf"],
@@ -39,43 +39,134 @@ baseline_features = [
 ]
 targets = ["cs", "cn", "bl"]
 elements = ["Ti", "Cu", "Fe", "Mn"]
+color_map = {
+    "nxPDF": bg_colors["bg_blue"],
+    "xPDF+nPDF": bg_colors["bg_light_blue"],
+    "XANES+nxPDF": "#283618",
+    "XANES+xPDF+nPDF": "#606c38",
+    "xPDF": bg_colors["bg_burgundy"],
+    "nPDF": bg_colors["bg_brown"],
+    "XANES+xPDF": bg_colors["bg_burgundy"],
+    "XANES+nPDF": bg_colors["bg_brown"],
+    "XANES": bg_colors["bg_yellow"],
+    "XANES+dPDF": bg_colors["bg_red"],
+}
 
 
-def result_plot_one(
-    ax, ys, yerrs, base_ys, base_yerrs, ylabels, base_ylabels, ylim=None
+def bunch_filter_features(database, tar, ele, features, model_type):
+    y = []
+    yerr = []
+    for i in range(len(features)):
+        data = database.filter_data(
+            ["target", "element", "features", "model_type"],
+            [tar, ele, features[i], model_type],
+        ).value
+        y.append(np.mean(data["test_scores"]))
+        yerr.append(np.std(data["test_scores"]))
+    label = convert_features_name(features)
+    return {"y": y, "yerr": yerr, "label": label}
+
+
+def another_result_plot_one(
+    ax,
+    left_vertical_dict,
+    left_horizontal_dict,
+    right_vertical_dict,
+    right_horizontal_dict,
+    both_horizontal_dict,
 ):
-    ax.set_xlim([-1, len(ys)])
-    xlim = ax.get_xlim()
-    ax.bar(range(len(ys)), ys, yerr=yerrs, color=cycle[0])
-    for i in range(len(ys)):
-        ax.text(
-            i,
-            ys[i],
-            "{:.3f}".format(ys[i]),
-        )
-    for i in range(len(base_ys)):
-        ax.fill_between(
-            np.linspace(*xlim, 100),
-            np.ones(100) * (base_ys[i] - base_yerrs[i] / 2),
-            np.ones(100) * (base_ys[i] + base_yerrs[i] / 2),
-            alpha=0.6,
-            color=cycle[i],
-            label=base_ylabels[i],
-        )
-    ax.set_xticks(
-        np.arange(0, len(ylabels) + 1),
-        [None, *ylabels],
-        rotation=45,
-        ha="right",
+    # artist position
+    bar_width = 0.8
+    bar_mid_distance = 1
+    group_sep_ratio = 0.5
+    group_sep_width = bar_mid_distance * (1 + group_sep_ratio)
+    margin_ratio = 0.5
+    margin_width = bar_mid_distance * margin_ratio
+
+    start_l = 0
+    left_ticks = [
+        start_l + bar_mid_distance * i
+        for i in range(len(left_vertical_dict["label"]))
+    ]
+    start_r = left_ticks[-1] + group_sep_width
+    right_ticks = [
+        start_r + bar_mid_distance * i
+        for i in range(len(right_vertical_dict["label"]))
+    ]
+    left_vertical_dict["xticks"] = left_ticks
+    right_vertical_dict["xticks"] = right_ticks
+    left_horizontal_dict["xticks"] = left_ticks
+    xlim = (
+        left_ticks[0] - bar_width / 2 * 3,
+        right_ticks[-1] + bar_width / 2 * 3,
     )
-    # ax.set_xticklabels(ylabels, rotation=45, ha="right")
-    if ylim:
-        ax.set_ylim(*ylim)
-    return ax
+    ax.set_xlim(*xlim)
+    left_horizontal_dict["xticks"] = [xlim[0], np.mean(xlim)]
+    right_horizontal_dict["xticks"] = [np.mean(xlim), xlim[1]]
+    both_horizontal_dict["xticks"] = xlim
+    xticks = np.array([*left_ticks, *right_ticks])
+    names = [*left_vertical_dict["label"], *right_vertical_dict["label"]]
+    ax.set_xticks(xticks + 0.5, names, rotation=30, ha="right")
+
+    for plot_dict in [left_vertical_dict, right_vertical_dict]:
+        out = ax.bar(
+            plot_dict["xticks"],
+            plot_dict["y"],
+            yerr=plot_dict["yerr"],
+            width=bar_width,
+            color=[
+                color_map[plot_dict["label"][i]]
+                for i in range(len(plot_dict["label"]))
+            ],
+        )
+        for i in range(len(plot_dict["y"])):
+            ax.text(
+                plot_dict["xticks"][i],
+                plot_dict["y"][i] + plot_dict["yerr"][i] / 2,
+                "{:.3f}".format(plot_dict["y"][i]),
+                fontsize=14,
+                ha="center",
+                va="bottom",
+            )
+
+    for plot_dict in [
+        left_horizontal_dict,
+        right_horizontal_dict,
+        both_horizontal_dict,
+    ]:
+        plot_dict["handles"] = []
+        print(plot_dict["xticks"]),
+        for i in range(len(plot_dict["y"])):
+            out = ax.fill_between(
+                np.linspace(
+                    plot_dict["xticks"][0], plot_dict["xticks"][-1], 100
+                ),
+                np.ones(100) * (plot_dict["y"][i] - plot_dict["yerr"][i] / 2),
+                np.ones(100) * (plot_dict["y"][i] + plot_dict["yerr"][i] / 2),
+                label=plot_dict["label"][i],
+                color=color_map[plot_dict["label"][i]],
+                alpha=0.7,
+            )
+            plot_dict["handles"].append(out)
+
+    # left_legend = ax.legend(
+    #     handles=left_horizontal_dict["handles"], loc="lower left"
+    # )
+    # right_legend = ax.legend(
+    #     handles=right_horizontal_dict["handles"], loc="lower right"
+    # )
+    # ax.add_artist(left_legend)
+    # ax.add_artist(right_legend)
+    ax.set_ylim([0, 1])
+    ax.set_xlim(
+        xticks[0] - bar_width / 2 - margin_width,
+        xticks[-1] + bar_width / 2 + margin_width,
+    )
+    ax.vlines(np.mean(xlim), [0], [1])
+    return ax, both_horizontal_dict["handles"], left_horizontal_dict["handles"]
 
 
-## results plot
-def results_plot(
+def another_plot(
     results_database: resultDatabase,
     tar="cs",
     model_type="rf",
@@ -83,70 +174,51 @@ def results_plot(
     ylabel="F1 score",
     ylim=[0, 1],
     fname=None,
+    save=False,
 ):
-    fig, axes = plt.subplots(1, len(elements), figsize=(11.2, 6.4))
-    baseline_names = convert_features_name(baseline_features)
-    features_names = convert_features_name(plot_features)
-    target = tar
-    for j in range(len(elements)):
-        scores = []
-        errors = []
-        base_scores = []
-        base_errors = []
-        for k in range((len(plot_features))):
-            data = results_database.filter_data(
-                ["target", "element", "features", "model_type"],
-                [target, elements[j], plot_features[k], model_type],
-            ).value
-            scores.append(np.mean(data["test_scores"]))
-            errors.append(np.std(data["test_scores"]))
-        for k in range(len(baseline_features)):
-            data = results_database.filter_data(
-                ["target", "element", "features", "model_type"],
-                [target, elements[j], baseline_features[k], model_type],
-            ).value
-            base_scores.append(np.mean(data["test_scores"]))
-            base_errors.append(np.std(data["test_scores"]))
+    fig, axes = plt.subplots(1, len(elements), figsize=(12, 6))
+    fig.subplots_adjust(bottom=0.2, wspace=0.1)
+    left_vertical_features = [["nx_pdf"], ["x_pdf", "n_pdf"]]
+    right_vertical_features = [
+        ["xanes", "nx_pdf"],
+        ["xanes", "x_pdf", "n_pdf"],
+    ]
+    left_horizontal_features = [["x_pdf"], ["n_pdf"]]
+    right_horizontal_features = [["xanes", "x_pdf"], ["xanes", "n_pdf"]]
+    both_horizontal_features = [["xanes"], ["xanes", "diff_x_pdf"]]
 
-        if ylim:
-            result_plot_one(
-                axes[j],
-                scores,
-                errors,
-                base_scores,
-                base_errors,
-                features_names,
-                baseline_names,
-                ylim=ylim,
+    for i in range(len(elements)):
+        features = [
+            left_vertical_features,
+            left_horizontal_features,
+            right_vertical_features,
+            right_horizontal_features,
+            both_horizontal_features,
+        ]
+        features_dicts = [
+            bunch_filter_features(
+                results_database, tar, elements[i], fea, "rf"
             )
+            for fea in features
+        ]
+        _, both_handles, left_handles = another_result_plot_one(
+            axes[i], *features_dicts
+        )
+        axes[i].set_title(elements[i], fontsize=18)
+        axes[i].tick_params(axis="x", length=0)
+        axes[i].set_ylim(ylim)
+        if i != 0:
+            axes[i].set_yticks([])
         else:
-            result_plot_one(
-                axes[j],
-                scores,
-                errors,
-                base_scores,
-                base_errors,
-                features_names,
-                baseline_names,
+            axes[i].set_ylabel(ylabel, fontsize=20)
+        if i == 3:
+            axes[i].legend(
+                handles=[*both_handles, *left_handles],
+                loc="lower right",
+                bbox_to_anchor=(0, 0, 1, 1),
             )
-
-        axes[j].set_title(elements[j])
-        if j == 0:
-            axes[j].set_ylabel(ylabel)
-        if j != 0:
-            axes[j].set_yticks([])
-
-    # setp
-    fig.suptitle(title, fontsize=18)
-    plt.legend()
-    # plt.legend(bbox_to_anchor=(1.2, 1.23))
-    # legends = [
-    #     ax.legend() for ax in axes if ax.get_legend() is not None
-    # ]
-    pars = plt.gcf().subplotpars
-    plt.subplots_adjust(right=pars.right - 0.04, top=pars.top - 0.03)
-    plt.tight_layout()
-    if fname:
+    fig.suptitle(title, fontsize=24, y=0.99)
+    if fname and save:
         plt.savefig(fname)
 
 
@@ -225,7 +297,6 @@ def feature_importance_plot(
 
 if __name__ == "__main__":
     # load results data
-    print(str(Path().cwd()))
     filename = "results/trained_data.pkl"
     with open(filename, "rb") as f:
         results_database = pickle.load(f)
@@ -235,66 +306,16 @@ if __name__ == "__main__":
     )
     print("Finished processing results_database.")
 
-    # plot
-    run_rf_kwargs = [
-        {
-            "tar": "cs",
-            "title": "Oxidation State - Random Forest",
-            "ylabel": "weighted mean F1 score",
-            "ylim": [0, 1],
-            "model_type": "rf",
-            "save_name": "imgs/result_cs_rf.png",
-        },
-        {
-            "tar": "cn",
-            "title": "Coordination Number - Random Forest",
-            "ylabel": "weighted mean F1 score",
-            "ylim": [0, 1],
-            "model_type": "rf",
-            "save_name": "imgs/result_cn_rf.png",
-        },
-        {
-            "tar": "bl",
-            "title": "Bond Length - Random Forest",
-            "ylabel": r"RMSE (\% mean BL)",
-            "ylim": [0, 0.06],
-            "model_type": "rf",
-            "save_name": r"imgs/result_bl_rf.png",
-        },
-    ]
-    # for kwarg in run_rf_kwargs:
-    #     results_plot(results_database, **kwarg)
-    # plt.show()
+    # load plot args
+    with open("results_plot_metadata_with_knn.json", "r") as f:
+        results_plot_rf_knn_kwargs = json.load(f)
 
-    run_knn_kwargs = [
-        {
-            "tar": "cs",
-            "title": "Oxidation State - kNN",
-            "ylabel": "weighted mean F1 score",
-            "ylim": [0, 1],
-            "model_type": "knn",
-            "save_name": "imgs/result_cs_knn.pdf",
-        },
-        {
-            "tar": "cn",
-            "title": "Coordination Number - kNN",
-            "ylabel": "weighted mean F1 score",
-            "ylim": [0, 1],
-            "model_type": "knn",
-            "save_name": "imgs/result_cn_knn.pdf",
-        },
-        {
-            "tar": "bl",
-            "title": "Bond Length - kNN",
-            "ylabel": r"RMSE (\% mean BL)",
-            "ylim": [0, 0.06],
-            "model_type": "knn",
-            "save_name": "imgs/result_bl_knn.pdf",
-        },
-    ]
-    # for kwarg in run_knn_kwargs:
-    #     results_plot(results_database, **kwarg)
-    # plt.show()
+    with open("results_plot_metadata.json", "r") as f:
+        results_plot_kwargs = json.load(f)
+
+    for kwargs in results_plot_kwargs:
+        another_plot(results_database, **kwargs)
+    plt.show()
 
     imp_kwargs = [
         {
@@ -319,6 +340,6 @@ if __name__ == "__main__":
             "fname": "imgs/importances_bl_rf.pdf",
         },
     ]
-    for kwarg in imp_kwargs:
-        feature_importance_plot(results_database, **kwarg)
-    plt.show()
+    # for kwarg in imp_kwargs:
+    #     feature_importance_plot(results_database, **kwarg)
+    # plt.show()

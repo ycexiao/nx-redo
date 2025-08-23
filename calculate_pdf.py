@@ -178,13 +178,13 @@ if __name__ == "__main__":
         os.path.join(example_dir, file_names[i])
         for i in range(len(file_names))
     ]
-    for i in range(len(elements)):
-        start = time.time()
-        docs = add_pdf_to_datasets(
-            example_path[i], elements[i], force_length=200
-        )
-        with open(example_path[i], "w") as f:
-            json.dump(docs, f)
+    # for i in range(len(elements)):
+    #     start = time.time()
+    #     docs = add_pdf_to_datasets(
+    #         example_path[i], elements[i], force_length=200
+    #     )
+    #     with open(example_path[i], "w") as f:
+    #         json.dump(docs, f)
 
     # dump_dir = "datasets"
     # dump_path = [
