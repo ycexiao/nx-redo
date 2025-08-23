@@ -1,0 +1,79 @@
+[
+    {
+        "title": "Oxidation State - Random Forest",
+        "tar": "cs",
+        "ylabel": "weighted mean F1 score",
+        "ylim": [
+            0,
+            1
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_cs_rf.pdf"
+    },
+    {
+        "title": "Coordination Number - Random Forest",
+        "tar": "cn",
+        "ylabel": "weighted mean F1 score",
+        "ylim": [
+            0,
+            1
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_cn_rf.pdf"
+    },
+    {
+        "title": "Bond Length - Random Forest",
+        "tar": "bl",
+        "ylabel": "RMSE (\\% mean BL)",
+        "ylim": [
+            0,
+            0.06
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_bl_rf.pdf"
+    },
+    {
+        "title": "Second Shell Mean Radius - Random Forest",
+        "tar": "bl_2nd",
+        "ylabel": "RMSE (\\% mean BL)",
+        "ylim": [
+            0,
+            0.06
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_bl_2nd_rf.pdf"
+    },
+    {
+        "title": "Oxidation State - kNN",
+        "tar": "cs",
+        "ylabel": "weighted mean F1 score",
+        "ylim": [
+            0,
+            1
+        ],
+        "model_type": "knn",
+        "fname": "imgs/result_cs_knn.pdf"
+    },
+    {
+        "title": "Coordination Number - kNN",
+        "tar": "cn",
+        "ylabel": "weighted mean F1 score",
+        "ylim": [
+            0,
+            1
+        ],
+        "model_type": "knn",
+        "fname": "imgs/result_cn_knn.pdf"
+    },
+    {
+        "title": "Bond Length - kNN",
+        "tar": "bl",
+        "ylabel": "RMSE (\\% mean BL)",
+        "ylim": [
+            0,
+            0.06
+        ],
+        "model_type": "knn",
+        "fname": "imgs/result_bl_knn.pdf"
+    }
+]

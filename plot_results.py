@@ -45,10 +45,10 @@ result_plot_color_map = {
     "xPDF+nPDF": bg_colors["bg_light_blue"],
     "XANES+nxPDF": "#283618",
     "XANES+xPDF+nPDF": "#606c38",
-    "xPDF": bg_colors["bg_burgundy"],
-    "nPDF": bg_colors["bg_brown"],
-    "XANES+xPDF": bg_colors["bg_burgundy"],
-    "XANES+nPDF": bg_colors["bg_brown"],
+    "nPDF": bg_colors["bg_burgundy"],
+    "xPDF": bg_colors["bg_brown"],
+    "XANES+nPDF": bg_colors["bg_burgundy"],
+    "XANES+xPDF": bg_colors["bg_brown"],
     "XANES": bg_colors["bg_yellow"],
     "XANES+dPDF": bg_colors["bg_red"],
 }
@@ -217,6 +217,7 @@ def result_plot(
         if i == 3:
             axes[i].legend(
                 handles=[*both_handles, *left_handles],
+                labels=["XANES", "XANES+dPDF", "(XANES+)xPDF", "(XANES+)nPDF"],
                 loc="lower right",
                 bbox_to_anchor=(0, 0, 1, 1),
             )
@@ -353,13 +354,14 @@ if __name__ == "__main__":
     with open("result_plot_kwargs.json", "r") as f:
         results_plot_kwargs = json.load(f)
 
-    # for kwargs in results_plot_kwargs:
-    #     result_plot(results_database, **kwargs)
-    # plt.show()
-
-    with open("important_plot_kwargs.json", "r") as f:
+    with open("importance_plot_kwargs.json", "r") as f:
         importances_plot_kwargs = json.load(f)
 
     for kwargs in results_plot_kwargs:
-        importance_plot(results_database, **kwargs)
+        result_plot(results_database, **kwargs, save=True)
+        pass
+
+    for kwargs in importances_plot_kwargs:
+        importance_plot(results_database, **kwargs, save=True)
+        pass
     plt.show()

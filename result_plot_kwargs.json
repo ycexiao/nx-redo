@@ -1,0 +1,46 @@
+[
+    {
+        "title": "Oxidation State",
+        "tar": "cs",
+        "ylabel": "weighted mean F1 score",
+        "ylim": [
+            0,
+            1
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_cs_rf.pdf"
+    },
+    {
+        "title": "Coordination Number",
+        "tar": "cn",
+        "ylabel": "weighted mean F1 score",
+        "ylim": [
+            0,
+            1
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_cn_rf.pdf"
+    },
+    {
+        "title": "Bond Length",
+        "tar": "bl",
+        "ylabel": "RMSE (\\% mean BL)",
+        "ylim": [
+            0,
+            0.06
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_bl_rf.pdf"
+    },
+    {
+        "title": "Second Shell Mean Radius",
+        "tar": "bl_2nd",
+        "ylabel": "RMSE (\\% mean BL)",
+        "ylim": [
+            0,
+            0.06
+        ],
+        "model_type": "rf",
+        "fname": "imgs/result_bl_2nd_rf.pdf"
+    }
+]

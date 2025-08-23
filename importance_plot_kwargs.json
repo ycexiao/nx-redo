@@ -1,0 +1,32 @@
+[
+    {
+        "tar": "cs",
+        "title": "Oxidation State",
+        "model_type": "rf",
+        "ylim": [
+            -0.01,
+            0.1
+        ],
+        "fname": "imgs/importances_cs_rf.pdf"
+    },
+    {
+        "tar": "cn",
+        "title": "Coordination Number",
+        "model_type": "rf",
+        "ylim": [
+            -0.01,
+            0.1
+        ],
+        "fname": "imgs/importances_cn_rf.pdf"
+    },
+    {
+        "tar": "bl",
+        "title": "Bond Length",
+        "model_type": "rf",
+        "ylim": [
+            -0.01,
+            0.1
+        ],
+        "fname": "imgs/importances_bl_rf.pdf"
+    }
+]
