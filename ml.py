@@ -57,13 +57,16 @@ def convert_features_name(features):
         "diff_x_pdf": "dPDF",
         "n/x_pdf": "n/xPDF",
     }
-    features_name = [
-        [map_name[features[i][j]] for j in range(len(features[i]))]
-        for i in range(len(features))
-    ]
-    features_name = [
-        "+".join(features_name[i]) for i in range(len(features_name))
-    ]
+    if isinstance(features, list):
+        features_name = [
+            [map_name[features[i][j]] for j in range(len(features[i]))]
+            for i in range(len(features))
+        ]
+        features_name = [
+            "+".join(features_name[i]) for i in range(len(features_name))
+        ]
+    elif isinstance(features, str):
+        features_name = map_name[features]
     return features_name
 
 

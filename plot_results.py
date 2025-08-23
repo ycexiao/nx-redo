@@ -10,6 +10,7 @@ from ml import convert_features_name
 
 import matplotlib
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 from bg_mpl_stylesheets.styles import all_styles
 from bg_mpl_stylesheets.colors import Colors
 from cycler import cycler
@@ -39,7 +40,7 @@ baseline_features = [
 ]
 targets = ["cs", "cn", "bl"]
 elements = ["Ti", "Cu", "Fe", "Mn"]
-color_map = {
+result_plot_color_map = {
     "nxPDF": bg_colors["bg_blue"],
     "xPDF+nPDF": bg_colors["bg_light_blue"],
     "XANES+nxPDF": "#283618",
@@ -67,7 +68,7 @@ def bunch_filter_features(database, tar, ele, features, model_type):
     return {"y": y, "yerr": yerr, "label": label}
 
 
-def another_result_plot_one(
+def result_plot_one(
     ax,
     left_vertical_dict,
     left_horizontal_dict,
@@ -115,7 +116,7 @@ def another_result_plot_one(
             yerr=plot_dict["yerr"],
             width=bar_width,
             color=[
-                color_map[plot_dict["label"][i]]
+                result_plot_color_map[plot_dict["label"][i]]
                 for i in range(len(plot_dict["label"]))
             ],
         )
@@ -144,7 +145,7 @@ def another_result_plot_one(
                 np.ones(100) * (plot_dict["y"][i] - plot_dict["yerr"][i] / 2),
                 np.ones(100) * (plot_dict["y"][i] + plot_dict["yerr"][i] / 2),
                 label=plot_dict["label"][i],
-                color=color_map[plot_dict["label"][i]],
+                color=result_plot_color_map[plot_dict["label"][i]],
                 alpha=0.7,
             )
             plot_dict["handles"].append(out)
@@ -162,11 +163,13 @@ def another_result_plot_one(
         xticks[0] - bar_width / 2 - margin_width,
         xticks[-1] + bar_width / 2 + margin_width,
     )
-    ax.vlines(np.mean(xlim), [0], [1])
+    ax.vlines(
+        np.mean(xlim), [0], [1], linestyle="dashed", linewidth=2, color="k"
+    )
     return ax, both_horizontal_dict["handles"], left_horizontal_dict["handles"]
 
 
-def another_plot(
+def result_plot(
     results_database: resultDatabase,
     tar="cs",
     model_type="rf",
@@ -201,7 +204,7 @@ def another_plot(
             )
             for fea in features
         ]
-        _, both_handles, left_handles = another_result_plot_one(
+        _, both_handles, left_handles = result_plot_one(
             axes[i], *features_dicts
         )
         axes[i].set_title(elements[i], fontsize=18)
@@ -222,35 +225,6 @@ def another_plot(
         plt.savefig(fname)
 
 
-def feature_importance_plot_one(ax, importances, ylim=None):
-    ax.plot(
-        range(len(importances[0])),
-        *importances,
-        alpha=0.2,
-    )
-    means = np.mean(importances, axis=0)
-    for h in range(int(len(means) // 100)):
-        ax.plot(
-            np.arange(h * 100, h * 100 + 100),
-            means[h * 100 : h * 100 + 100],
-        )
-    peaks, _ = find_peaks(means, height=0.02)
-    if ylim:
-        ax.set_ylim(ylim)
-    else:
-        ylim = ax.get_ylim()
-    ax.set_xlim([0, 300])
-    for ind in peaks:
-        ax.vlines(
-            np.arange(len(importances[0]))[ind],
-            *ylim,
-            linestyle="--",
-            linewidth=0.5,
-        )
-    ax.set_yticks([])
-    ax.set_xticks([0, 100, 200, 300])
-
-
 importances_plot_features = [
     ["x_pdf", "n_pdf"],
     ["nx_pdf"],
@@ -261,9 +235,55 @@ importances_plot_features = [
 ]
 
 
+importance_plot_color_map = {
+    "XANES": bg_colors["bg_muted_olive"],
+    "nPDF": bg_colors["bg_blue"],
+    "xPDF": bg_colors["bg_light_blue"],
+    "nxPDF": bg_colors["bg_green"],
+}
+
+
+def importance_plot_one(ax, importances, plot_colors, ylim=None):
+    ax.plot(
+        range(len(importances[0])),
+        *importances,
+        alpha=0.6,
+        color=bg_colors["bg_grey"],
+    )
+    means = np.mean(importances, axis=0)
+    for h in range(int(len(means) // 100)):
+        ax.plot(
+            np.arange(h * 100, h * 100 + 100),
+            means[h * 100 : h * 100 + 100],
+            color=plot_colors[h],
+        )
+    peaks, _ = find_peaks(means, height=0.02)
+    if ylim:
+        ax.set_ylim(ylim)
+    else:
+        ylim = ax.get_ylim()
+    ax.set_xlim([0, 300])
+    for ind in peaks:
+        # ax.vlines(
+        #     np.arange(len(importances[0]))[ind],
+        #     *ylim,
+        #     linestyle="--",
+        #     linewidth=0.5,
+        # )
+        pass
+    ax.set_yticks([])
+    ax.set_xticks([0, 100, 200])
+
+
 ## feature importance plot
-def feature_importance_plot(
-    results_database, tar, title, model_type="rf", ylim=None, fname=None
+def importance_plot(
+    results_database,
+    tar,
+    title,
+    model_type="rf",
+    ylim=None,
+    fname=None,
+    save=False,
 ):
     feature_names = convert_features_name(importances_plot_features)
     fig, axes = plt.subplots(
@@ -279,19 +299,39 @@ def feature_importance_plot(
                 ["target", "features", "element", "model_type"],
                 [tar, importances_plot_features[j], elements[k], model_type],
             ).value
+            plot_colors = [
+                importance_plot_color_map[convert_features_name(fea)]
+                for fea in importances_plot_features[j]
+            ]
             importances = data["importances"]
-            feature_importance_plot_one(axes[j, k], importances, ylim=ylim)
+            importance_plot_one(
+                axes[j, k], importances, plot_colors, ylim=ylim
+            )
 
             if j == 0:
-                axes[j, k].set_title(elements[k])
+                axes[j, k].set_title(elements[k], fontsize=20)
             if k == 0:
-                axes[j, k].set_ylabel(feature_names[j], rotation=0, ha="right")
+                axes[j, k].set_ylabel(
+                    feature_names[j], rotation=45, ha="right", fontsize=16
+                )
 
-    fig.suptitle(title, fontsize=18)
-    plt.subplots_adjust(
-        left=0.2, right=0.9, top=0.9, bottom=0.1, wspace=0.2, hspace=0.2
+            axes[j, k].tick_params(top=False)
+    fig.suptitle(title, fontsize=24)
+    # plt.subplots_adjust(
+    #     left=0.2, right=0.9, top=0.9, bottom=0.1, wspace=0.2, hspace=0.2
+    # )
+    custom_legend = [
+        Line2D([0], [0], color=c, label=b)
+        for b, c in importance_plot_color_map.items()
+    ]
+    fig.legend(
+        handles=custom_legend,
+        ncols=len(custom_legend),
+        loc="lower center",
+        # bbox_to_anchor=(0.7, 0.12),
     )
-    if fname:
+    plt.subplots_adjust(left=0.18, bottom=0.20, hspace=0.1, wspace=0.1)
+    if fname and save:
         plt.savefig(fname)
 
 
@@ -307,39 +347,19 @@ if __name__ == "__main__":
     print("Finished processing results_database.")
 
     # load plot args
-    with open("results_plot_metadata_with_knn.json", "r") as f:
+    with open("result_plot_with_rf_knn_kwargs.json", "r") as f:
         results_plot_rf_knn_kwargs = json.load(f)
 
-    with open("results_plot_metadata.json", "r") as f:
+    with open("result_plot_kwargs.json", "r") as f:
         results_plot_kwargs = json.load(f)
 
-    for kwargs in results_plot_kwargs:
-        another_plot(results_database, **kwargs)
-    plt.show()
-
-    imp_kwargs = [
-        {
-            "tar": "cs",
-            "title": "Oxidation State",
-            "model_type": "rf",
-            "ylim": [-0.01, 0.1],
-            "fname": "imgs/importances_cs_rf.pdf",
-        },
-        {
-            "tar": "cn",
-            "title": "Coordination Number",
-            "model_type": "rf",
-            "ylim": [-0.01, 0.1],
-            "fname": "imgs/importances_cn_rf.pdf",
-        },
-        {
-            "tar": "bl",
-            "title": "Bond Length",
-            "model_type": "rf",
-            "ylim": [-0.01, 0.1],
-            "fname": "imgs/importances_bl_rf.pdf",
-        },
-    ]
-    # for kwarg in imp_kwargs:
-    #     feature_importance_plot(results_database, **kwarg)
+    # for kwargs in results_plot_kwargs:
+    #     result_plot(results_database, **kwargs)
     # plt.show()
+
+    with open("important_plot_kwargs.json", "r") as f:
+        importances_plot_kwargs = json.load(f)
+
+    for kwargs in results_plot_kwargs:
+        importance_plot(results_database, **kwargs)
+    plt.show()
